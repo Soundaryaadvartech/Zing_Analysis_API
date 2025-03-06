@@ -11,9 +11,9 @@ from database.models import Item
 router = APIRouter()
 
 @router.get("/inventory_summary")
-def inventory_summary(days: int, db:Session = Depends(get_db)):
+def inventory_summary(days: int, days_to_predict: int, db:Session = Depends(get_db)):
     try:
-        summary_df = generate_inventory_summary(db, days)
+        summary_df = generate_inventory_summary(db, days, days_to_predict)
 
         return JSONResponse(
             status_code=status.HTTP_200_OK,
