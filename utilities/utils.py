@@ -216,9 +216,8 @@ def generate_inventory_summary(db: Session, days: int, days_to_predict: int):
 
 
     numeric_cols = df_done.select_dtypes(include=['number']).columns
-    df_done[numeric_cols] = df_done[numeric_cols].round(2)
-    df_done["__Launch_Date"] = df_done["__Launch_Date"].dt.strftime('%Y-%m-%d')   
-
+    df_done.loc[:, numeric_cols] = df_done[numeric_cols].round(2)
+    df_done.loc[:, "__Launch_Date"] = df_done["__Launch_Date"].dt.strftime('%Y-%m-%d')
 
     return df_done.sort_values(by="Item_Id").reset_index(drop=True)
 

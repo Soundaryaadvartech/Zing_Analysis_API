@@ -1,5 +1,6 @@
 import traceback
 import json
+from typing import Optional
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 from sqlalchemy import distinct
@@ -11,8 +12,10 @@ from database.models import Item
 router = APIRouter()
 
 @router.get("/inventory_summary")
-def inventory_summary(days: int, days_to_predict: int, db:Session = Depends(get_db)):
+def inventory_summary(days: Optional[int] = None, days_to_predict: Optional[int] = None, db:Session = Depends(get_db)):
     try:
+        days = days or 60
+        days_to_predict = days_to_predict or 30
         summary_df = generate_inventory_summary(db, days, days_to_predict)
 
         return JSONResponse(
