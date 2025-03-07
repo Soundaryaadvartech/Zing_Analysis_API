@@ -52,16 +52,16 @@ def generate_inventory_summary(db: Session, days: int, days_to_predict: int):
     t1 = pd.merge(t1, t4, how="left", on="Item_Id")
     t1["__Launch_Date"].fillna(t1["First_Sold_Date"], inplace=True)
 
-    # Function to compute item summary
+    # Comprehensive Item Summary Function
     def get_item_summary(t1, t2, t3, days):
         # Convert dates to datetime
         t1['__Launch_Date'] = pd.to_datetime(t1['__Launch_Date'])
-        t2["Date"] = pd.to_datetime(t2["Date"])
-        t3["Date"] = pd.to_datetime(t3["Date"])
+        t2['Date'] = pd.to_datetime(t2['Date'])
+        t3['Date'] = pd.to_datetime(t3['Date'])
         t3["Item_Id"] = t3["Item_Id"].astype("int")
 
         # Get minimum launch date for each Item_Name
-        item_min_launch_date = t1.groupby('Item_Name')['__Launch_Date'].min().reset_index()
+        item_min_launch_date = t1.groupby(['Item_Name',"Item_Type","Category"])['__Launch_Date'].min().reset_index()
         t1 = t1.merge(item_min_launch_date, on='Item_Name', suffixes=('', '_Min'))
 
         # Calculate date range
@@ -69,26 +69,25 @@ def generate_inventory_summary(db: Session, days: int, days_to_predict: int):
         t1['End_Date'] = t1['Start_Date'] + pd.to_timedelta(days, unit='D')
 
         # Filter data based on date range
-        t2 = t2.merge(t1[['Item_Id', 'Item_Name', 'Start_Date', 'End_Date']], on='Item_Id', how='inner')
-        t3 = t3.merge(t1[['Item_Id', 'Item_Name', 'Start_Date', 'End_Date']], on='Item_Id', how='inner')
+        t2 = t2.merge(t1[['Item_Id', 'Item_Name','Item_Type','Category', 'Start_Date', 'End_Date']], on='Item_Id', how='inner')
+        t3 = t3.merge(t1[['Item_Id', 'Item_Name','Item_Type','Category', 'Start_Date', 'End_Date']], on='Item_Id', how='inner')
 
-        # Filter sales and views/add-to-cart data within date range
         t2_filtered = t2[(t2['Date'] >= t2['Start_Date']) & (t2['Date'] <= t2['End_Date'])]
         t3_filtered = t3[(t3['Date'] >= t3['Start_Date']) & (t3['Date'] <= t3['End_Date'])]
 
         # Aggregate data
-        t1_agg = t1.groupby("Item_Name", as_index=False)["Current_Stock"].sum()
-        t2_agg = t2_filtered.groupby("Item_Name", as_index=False)[["Quantity", "Total_Value"]].sum()
-        t3_agg = t3_filtered.groupby("Item_Name", as_index=False)[["Items_Viewed", "Items_Addedtocart"]].sum()
+        t1_agg = t1.groupby(['Item_Name','Item_Type','Category'], as_index=False)['Current_Stock'].sum()
+        t2_agg = t2_filtered.groupby(['Item_Name','Item_Type','Category'], as_index=False)[['Quantity', 'Total_Value']].sum()
+        t3_agg = t3_filtered.groupby(['Item_Name','Item_Type','Category'], as_index=False)[['Items_Viewed', 'Items_Addedtocart']].sum()
 
         # Merge aggregated values
-        final_df = t1_agg.merge(t2_agg, on="Item_Name", how="left")
-        final_df = final_df.merge(t3_agg, on="Item_Name", how="left")
-        final_df.fillna(0)
+        final_df = t1_agg.merge(t2_agg, on=['Item_Name','Item_Type','Category'], how='left')
+        final_df = final_df.merge(t3_agg, on=['Item_Name','Item_Type','Category'], how='left')
+        final_df = final_df.fillna(0)
 
         return final_df
 
-    # Generate summary
+    # Generate initial summary
     df = get_item_summary(t1, t2, t3, days)
 
     # Calculate total quantity sold per item
@@ -100,6 +99,7 @@ def generate_inventory_summary(db: Session, days: int, days_to_predict: int):
     # Calculate total stock
     temp_total = pd.merge(temp_curr, temp_quan, how="inner", on=['Item_Name','Item_Type','Category'])
     temp_total["Total_Stock"] = temp_total["Alltime_Total_Quantity"] + temp_total["Current_Stock"]
+    
     
     # Merge and calculate metrics
     df_final = df.merge(temp_total[["Item_Name","Item_Type","Category","Total_Stock","Alltime_Total_Quantity","Sale_Discount"]], how="left", on=['Item_Name','Item_Type','Category'])
@@ -147,7 +147,7 @@ def generate_inventory_summary(db: Session, days: int, days_to_predict: int):
     # Calculate stock values
     df_final["Alltime_Total_Quantity_Value"] =df_final["Alltime_Total_Quantity"]* (df_final["Sale_Price"] *((100-df_final["Sale_Discount"])/100)).fillna(0)
     df_final["Current_Stock_Value"] = df_final["Current_Stock"] * (df_final["Sale_Price"] *((100-df_final["Sale_Discount"])/100)).fillna(0)
-    df_final.rename(columns={"Quantity":"Quantity_sold", "Total_value":"Sold_Quantity_Value"}, inplace=True)
+    df_final.rename(columns={"Quantity":"Quantity_sold", "Total_Value":"Sold_Quantity_Value"}, inplace=True)
     df_final["Total_Stock_Value"] = ((df_final["Sale_Price"] *((100-df_final["Sale_Discount"])/100))  * df_final["Total_Stock"]).fillna(0)
     
     df_final["Alltime_perday_View"] = round((df_final["Alltime_Items_Viewed"]/df_final["days_since_launch"]),2).fillna(0)
@@ -217,7 +217,7 @@ def generate_inventory_summary(db: Session, days: int, days_to_predict: int):
 
     numeric_cols = df_done.select_dtypes(include=['number']).columns
     df_done[numeric_cols] = df_done[numeric_cols].round(2)
-    
+    df_done["__Launch_Date"] = df_done["__Launch_Date"].dt.strftime('%Y-%m-%d')   
 
 
     return df_done.sort_values(by="Item_Id").reset_index(drop=True)
